@@ -3,6 +3,14 @@ export class User {
 	fullname: string;
     password: string;
     groups: number;
+    info: string;
+}
+
+export class Role {
+    id: string;     // GUID
+    name: string;
+	index: number;
+    description: string;
 }
 
 export class UserGroups {
@@ -40,15 +48,12 @@ export class UserGroups {
     }
 
     static GroupToLabel(value: number): string {
-        let result = '';
+        let result = [];
         for (let i = 0; i < this.Groups.length; i++) {
             if (value & this.Groups[i].id) {
-                if (result) {
-                    result += ',';
-                }
-                result += this.Groups[i].label;
+                result.push(this.Groups[i].label);
             }
         }
-        return result;
+        return result.join(', ');
     }
 }

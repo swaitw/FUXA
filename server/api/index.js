@@ -4,8 +4,9 @@
 
 const fs = require('fs');
 var express = require('express');
+var morgan = require('morgan');
 var bodyParser = require('body-parser');
-var authJwt = require('./jwt-helper');
+const authJwt = require('./jwt-helper');
 const rateLimit = require("express-rate-limit");
 
 var prjApi = require('./projects');
@@ -18,11 +19,12 @@ var scriptsApi = require('./scripts');
 var resourcesApi = require('./resources');
 var daqApi = require('./daq');
 var commandApi = require('./command');
+const reports = require('../dist/reports.service');
+const reportsApi = new reports.ReportsApiService();
 
 var apiApp;
 var server;
 var runtime;
-var editor;
 
 function init(_server, _runtime) {
     server = _server;
@@ -30,11 +32,13 @@ function init(_server, _runtime) {
     return new Promise(function (resolve, reject) {
         if (runtime.settings.disableServer !== false) {
             apiApp = express();
-            
+            apiApp.use(morgan(['combined', 'common', 'dev', 'short', 'tiny'].
+                includes(runtime.settings.logApiLevel) ? runtime.settings.logApiLevel : 'combined'));
+
             var maxApiRequestSize = runtime.settings.apiMaxLength || '35mb';
             apiApp.use(bodyParser.json({limit:maxApiRequestSize}));
             apiApp.use(bodyParser.urlencoded({limit:maxApiRequestSize,extended:true}));
-            authJwt.init(runtime.settings.secretCode, runtime.settings.tokenExpiresIn);
+            authJwt.init(runtime.settings.secureEnabled, runtime.settings.secretCode, runtime.settings.tokenExpiresIn);
             prjApi.init(runtime, authJwt.verifyToken, verifyGroups);
             apiApp.use(prjApi.app());
             usersApi.init(runtime, authJwt.verifyToken, verifyGroups);
@@ -55,12 +59,14 @@ function init(_server, _runtime) {
             apiApp.use(resourcesApi.app());
             commandApi.init(runtime, authJwt.verifyToken, verifyGroups);
             apiApp.use(commandApi.app());
+            reportsApi.init(runtime, authJwt.verifyToken, verifyGroups);
+            apiApp.use(reportsApi.app());
 
             const limiter = rateLimit({
                 windowMs: 5 * 60 * 1000, // 5 minutes
                 max: 100 // limit each IP to 100 requests per windowMs
             });
-              
+
             //  apply to all requests
             apiApp.use(limiter);
 
@@ -75,7 +81,7 @@ function init(_server, _runtime) {
                         delete tosend.smtp.password;
                     }
                     // res.header("Access-Control-Allow-Origin", "*");
-                    // res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");                    
+                    // res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
                     res.json(tosend);
                 } else {
                     res.status(404).end();
@@ -87,10 +93,10 @@ function init(_server, _runtime) {
              * POST Server user settings
              */
             apiApp.post("/api/settings", authJwt.verifyToken, function(req, res, next) {
-                var groups = verifyGroups(req);
+                const permission = verifyGroups(req);
                 if (res.statusCode === 403) {
                     runtime.logger.error("api post settings: Tocken Expired");
-                } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+                } else if (!authJwt.haveAdminPermission(permission)) {
                     res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                     runtime.logger.error("api post settings: Unauthorized");
                 } else {
@@ -110,6 +116,28 @@ function init(_server, _runtime) {
                 }
             });
 
+            /**
+             * GET Heartbeat to check token
+             */
+            apiApp.post('/api/heartbeat', authJwt.verifyToken, function (req, res) {
+                if (!runtime.settings.secureEnabled) {
+                    res.end();
+                } else if (res.statusCode === 403) {
+                    runtime.logger.error("api post heartbeat: Tocken Expired");
+                } else if (req.body.params) {
+                    const token = authJwt.getNewToken(req.headers)
+                    if (token) {
+                        res.status(200).json({
+                            message: 'tokenRefresh',
+                            token: token
+                        });
+                    } else {
+                        res.end();
+                    }
+                } else {
+                    res.end();
+                }
+            });
             runtime.logger.info('api: init successful!', true);
         } else {
         }
@@ -121,10 +149,10 @@ function mergeUserSettings(settings) {
     if (settings.language) {
         runtime.settings.language = settings.language;
     }
-    // if (settings.uiPort) {
-    //     runtime.settings.uiPort = settings.uiPort;
-    // }
+    runtime.settings.broadcastAll = settings.broadcastAll;
     runtime.settings.secureEnabled = settings.secureEnabled;
+    runtime.settings.logFull = settings.logFull;
+    runtime.settings.userRole = settings.userRole;
     if (settings.secureEnabled) {
         runtime.settings.tokenExpiresIn = settings.tokenExpiresIn;
     }
@@ -134,10 +162,21 @@ function mergeUserSettings(settings) {
     if (settings.daqstore) {
         runtime.settings.daqstore = settings.daqstore;
     }
+    if (settings.alarms) {
+        runtime.settings.alarms = settings.alarms;
+    }
 }
 
 function verifyGroups(req) {
-    return (runtime.settings && runtime.settings.secureEnabled) ? ((req.tokenExpired) ? 0 : req.userGroups) : authJwt.adminGroups[0];
+    if (runtime.settings && runtime.settings.secureEnabled) {
+        if (req.tokenExpired) {
+            return (runtime.settings.userRole) ? null : 0;
+        }
+        const userInfo = runtime.users.getUserCache(req.userId);
+        return (runtime.settings.userRole && req.userId !== 'admin') ? userInfo : userInfo ? userInfo.groups : req.userGroups;
+    } else {
+        return authJwt.adminGroups[0];
+    }
 }
 
 function start() {
@@ -152,5 +191,6 @@ module.exports = {
     stop: stop,
 
     get apiApp() { return apiApp; },
-    get server() { return server; }
+    get server() { return server; },
+    get authJwt() { return authJwt; }
 };

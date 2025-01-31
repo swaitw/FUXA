@@ -11,12 +11,18 @@ var HTTPclient = require('./httprequest');
 var MQTTclient = require('./mqtt');
 var EthernetIPclient = require('./ethernetip');
 var FuxaServer = require('./fuxaserver');
+var ODBCclient = require('./odbc');
 // var TEMPLATEclient = require('./template');
+
+const path = require('path');
+const utils = require('../utils');
 
 var deviceCloseTimeout = 1000;
 var DEVICE_CHECK_STATUS_INTERVAL = 5000;
 var SERVER_POLLING_INTERVAL = 1000;             // with DAQ enabled, will be saved only changed values in this interval
 var DEVICE_POLLING_INTERVAL = 3000;             // with DAQ enabled, will be saved only changed values in this interval
+
+var fncGetDeviceProperty;
 
 function Device(data, runtime) {
     var property = { id: data.id, name: data.name };        // Device property (name, id)
@@ -29,55 +35,65 @@ function Device(data, runtime) {
     var devicePolling = null;                               // TimerInterval to polling read device value
     var connectionStatus = ConnectionStatusEnum.OFF;        // Connection status depending of read tag value response
     var pollingInterval = DEVICE_POLLING_INTERVAL;
+    var sharedDevices = data.sharedDevices;
+    var tryToConnect = 0;
     var comm;                                               // Interface to OPCUA/S7/.. Device
-                                                            // required: connect, disconnect, isConnected, polling, init, load, getValue, 
-                                                            // getValues, getStatus, setValue, bindAddDaq, getTagProperty, 
+                                                            // required: connect, disconnect, isConnected, polling, init, load, getValue,
+                                                            // getValues, getStatus, setValue, bindAddDaq, getTagProperty,
+    fncGetDeviceProperty = runtime.project.getDeviceProperty;
+
     if (data.type === DeviceEnum.S7) {
         if (!S7client) {
             return null;
         }
-        comm = S7client.create(data, logger, events, manager);
+        comm = S7client.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.OPCUA) {
         if (!OpcUAclient) {
             return null;
         }
-        comm = OpcUAclient.create(data, logger, events, manager);
+        comm = OpcUAclient.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.ModbusRTU || data.type === DeviceEnum.ModbusTCP) {
         if (!MODBUSclient) {
             return null;
         }
-        comm = MODBUSclient.create(data, logger, events, manager);        
+        comm = MODBUSclient.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.BACnet) {
         if (!BACNETclient) {
             return null;
         }
-        comm = BACNETclient.create(data, logger, events, manager);        
+        comm = BACNETclient.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.WebAPI) {
         if (!HTTPclient) {
             return null;
         }
-        comm = HTTPclient.create(data, logger, events, manager);        
+        comm = HTTPclient.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.MQTTclient) {
         if (!MQTTclient) {
             return null;
         }
-        comm = MQTTclient.create(data, logger, events, manager);        
+        data.certificatesDir = path.resolve(runtime.settings.appDir, '_certificates');
+        comm = MQTTclient.create(data, logger, events, runtime);
     } else if (data.type === DeviceEnum.EthernetIP) {
         if (!EthernetIPclient) {
             return null;
         }
-        comm = EthernetIPclient.create(data, logger, events, manager);     
+        comm = EthernetIPclient.create(data, logger, events, manager, runtime);
     } else if (data.type === DeviceEnum.FuxaServer) {
         if (!FuxaServer) {
             return null;
         }
-        comm = FuxaServer.create(data, logger, events, manager);     
+        comm = FuxaServer.create(data, logger, events, manager);
+    } else if (data.type === DeviceEnum.ODBC) {
+        if (!ODBCclient) {
+            return null;
+        }
+        comm = ODBCclient.create(data, logger, events, manager);
     }
     // else if (data.type === DeviceEnum.Template) {
     //     if (!TEMPLATEclient) {
     //         return null;
     //     }
-    //     comm = TEMPLATEclient.create(data, logger, events, manager);        
+    //     comm = TEMPLATEclient.create(data, logger, events, manager);
     // }
     if (!comm) {
         return null;
@@ -89,6 +105,7 @@ function Device(data, runtime) {
         currentCmd = DeviceCmdEnum.START;
         if (status === DeviceStatusEnum.INIT) {
             logger.info(`'${property.name}' start`);
+            this.restoreValues();
             var self = this;
             this.checkStatus();
             deviceCheckStatus = setInterval(function () {
@@ -116,7 +133,9 @@ function Device(data, runtime) {
             comm.disconnect().then(function () {
                 status = DeviceStatusEnum.INIT;
                 resolve();
-            });
+            }).catch(function (err) {
+                reject(err);
+            });;
         });
     }
 
@@ -125,11 +144,15 @@ function Device(data, runtime) {
      */
     this.checkStatus = function () {
         if (status === DeviceStatusEnum.INIT && currentCmd === DeviceCmdEnum.START) {
-            this.connect().then(function () {
+            const self = this;
+            this.connect().then(() => {
+                tryToConnect = 0;
                 status = DeviceStatusEnum.IDLE;
             }).catch(function (err) {
-                if (err) {
-                    console.error(err);
+                logger.error(`'${property.name}' connect error! ${err} (${tryToConnect})`);
+                if (tryToConnect++ > 3) {
+                    tryToConnect = 0;
+                    self.disconnect().then(() => {});
                 }
             });
         } else if (status === DeviceStatusEnum.IDLE && !comm.isConnected()) {
@@ -179,7 +202,7 @@ function Device(data, runtime) {
     }
 
     /**
-     * Call Device to disconnect 
+     * Call Device to disconnect
      */
     this.disconnect = function () {
         return comm.disconnect();
@@ -218,9 +241,9 @@ function Device(data, runtime) {
     /**
      * Call Device to set Tag value
      */
-    this.setValue = function (id, value, fnc) {
+    this.setValue = async function (id, value, fnc) {
         var fncvalue = this.getValueInFunction(this.getValue(id), value, fnc);
-        return comm.setValue(id, value);
+        return await comm.setValue(id, value);
     }
 
     /**
@@ -246,12 +269,18 @@ function Device(data, runtime) {
                 }).catch(function (err) {
                     reject(err);
                 });
+            } else if (data.type === DeviceEnum.ODBC) {
+                comm.browse(path, callback).then(function (result) {
+                    resolve(result);
+                }).catch(function (err) {
+                    reject(err);
+                });
             } else {
                 reject('Browse not supported!');
             }
         });
     }
-    
+
     /**
      * Call Device to return Tag/Node attribute (only OPCUA)
      */
@@ -294,6 +323,11 @@ function Device(data, runtime) {
         //return comm.addDaq = fnc;
     }
 
+    this.bindGetDaqValueToRestore = function (fnc) {
+        this.getDaqValueToRestore = fnc;
+    }
+    this.getDaqValueToRestore = null;   // Function to get current value to restore by start
+
     /**
      * Call Device to return Tag property
      */
@@ -305,7 +339,7 @@ function Device(data, runtime) {
      * Bind function to ask project stored property (security)
      */
     this.bindGetProperty = function (fnc) {
-        if (data.type === DeviceEnum.OPCUA || data.type === DeviceEnum.MQTTclient) {
+        if (data.type === DeviceEnum.OPCUA || data.type === DeviceEnum.MQTTclient || data.type === DeviceEnum.ODBC) {
             comm.bindGetProperty(fnc);
         }
     }
@@ -322,8 +356,8 @@ function Device(data, runtime) {
     /**
      * Set connection status of device in FuxaServer
      * used only from FuxaServer device
-     * @param {*} deviceId 
-     * @param {*} status 
+     * @param {*} deviceId
+     * @param {*} status
      */
     this.setDeviceConnectionStatus = function (deviceId, status) {
         comm.setConnectionStatus(deviceId, status);
@@ -342,11 +376,47 @@ function Device(data, runtime) {
                 return parseFloat(current) + parseFloat(fnc[1]);
             } else if (fnc[0] === 'remove') {
                 return parseFloat(current) - parseFloat(fnc[1]);
-            }     
+            }
         } catch (err) {
-            console.error(err);
+            logger.error(err);
         }
         return value;
+    }
+
+    this.restoreValues = () => {
+        try {
+            if (this.getDaqValueToRestore) {
+                var self = this;
+                this.getDaqValueToRestore(property.id).then(async (toRestore) => {
+                    var restored = 0;
+                    for (let element of toRestore) {
+                        if (element.id && !utils.isNullOrUndefined(element.value)) {
+                            const result = await self.setValue(element.id, element.value);
+                            if (result) {
+                                restored++;
+                            }
+                        }
+                    }
+                    logger.info(`'${property.name}' restored ${restored}/${toRestore.length} values`);
+                }).catch((err) => {
+                    logger.error(`'${property.name}' restore error! ${err}`);
+                });
+            }
+        } catch (err) {
+            logger.error(`'${property.name}' restore error! ${err}`);
+        }
+    }
+
+    this.getTagDaqSettings = (tagId) => {
+        return comm.getTagDaqSettings ? comm.getTagDaqSettings(tagId) : null;
+    }
+
+    this.setTagDaqSettings = (tagId, settings) => {
+        return comm.setTagDaqSettings ? comm.setTagDaqSettings(tagId, settings) : null;
+    }
+
+    this.getComm = () => {
+        return comm;
     }
 
     this.load(data);
@@ -354,13 +424,20 @@ function Device(data, runtime) {
 
 /**
  * Return the property (security mode) supported from device
- * @param {*} endpoint 
- * @param {*} type 
+ * @param {*} endpoint
+ * @param {*} type
  */
-function getSupportedProperty(endpoint, type) {
+function getSupportedProperty(endpoint, type, packagerManager) {
+    var self = this;
     return new Promise(function (resolve, reject) {
         if (type === DeviceEnum.OPCUA) {
             OpcUAclient.getEndPoints(endpoint).then(function (result) {
+                resolve(result);
+            }).catch(function (err) {
+                reject(err);
+            });
+        } else if (type === DeviceEnum.ODBC) {
+            ODBCclient.getTables(endpoint, fncGetDeviceProperty, packagerManager).then(function (result) {
                 resolve(result);
             }).catch(function (err) {
                 reject(err);
@@ -373,7 +450,7 @@ function getSupportedProperty(endpoint, type) {
 
 /**
  * Return the result of request
- * @param {*} property 
+ * @param {*} property
  */
 function getRequestResult(property) {
     return new Promise(function (resolve, reject) {
@@ -391,7 +468,7 @@ function getRequestResult(property) {
 
 /**
  * Load the plugin library
- * @param {*} type 
+ * @param {*} type
  */
 function loadPlugin(type, module) {
     if (type === DeviceEnum.S7) {
@@ -410,6 +487,8 @@ function loadPlugin(type, module) {
         EthernetIPclient = require(module);
     } else if (type === DeviceEnum.FuxaServer) {
         FuxaServer = require(module);
+    } else if (type === DeviceEnum.ODBC) {
+        ODBCclient = require(module);
     }
 }
 
@@ -445,6 +524,7 @@ var DeviceEnum = {
     MQTTclient: 'MQTTclient',
     EthernetIP: 'EthernetIP',
     FuxaServer: 'FuxaServer',
+    ODBC: 'ODBC',
     // Template: 'template'
 }
 

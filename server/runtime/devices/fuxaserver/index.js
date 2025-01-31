@@ -21,7 +21,7 @@ function FuxaServer(_data, _logger, _events) {
     var type;
 
     /**
-     * initialize the server device type 
+     * initialize the server device type
      */
     this.init = function (_type) {
         type = _type;
@@ -49,18 +49,18 @@ function FuxaServer(_data, _logger, _events) {
     }
 
     /**
-     * Read values in polling mode 
+     * Read values in polling mode
      * Update the tags values list, save in DAQ if value changed or in interval and emit values to clients
      */
     this.polling = async function () {
         if (_checkWorking(true)) {
             try {
                 if (tocheck) {
-                    var varsValueChanged = _checkVarsChanged();
+                    var varsValueChanged = await _checkVarsChanged();
                     lastTimestampValue = new Date().getTime();
                     _emitValues(varsValue);
-                    if (this.addDaq) {
-                        this.addDaq(varsValueChanged, data.name);
+                    if (this.addDaq && !utils.isEmptyObject(varsValueChanged)) {
+                        this.addDaq(varsValueChanged, data.name, data.id);
                     }
                 }
                 _checkConnectionStatus();
@@ -82,13 +82,15 @@ function FuxaServer(_data, _logger, _events) {
         connectionTags = [];
         for (var id in data.tags) {
             tagsMap[id] = data.tags[id];
-            if (data.tags[id].init) {
-                data.tags[id].value = _parseValue(data.tags[id].init);
+            const dataTag = data.tags[id];
+            if (dataTag.init) {
+                data.tags[id].value = _parseValue(dataTag.init, dataTag.type);
             }
-            if (data.tags[id].sysType === TagSystemTypeEnum.deviceConnectionStatus) {
+            if (dataTag.sysType === TagSystemTypeEnum.deviceConnectionStatus) {
                 data.tags[id].timestamp = Date.now();
                 connectionTags.push(data.tags[id]);
             }
+            varsValue[id] = data.tags[id];
         }
         tocheck = !utils.isEmptyObject(data.tags);
         logger.info(`'${data.name}' data loaded (${count})`, true);
@@ -134,17 +136,19 @@ function FuxaServer(_data, _logger, _events) {
      */
     this.setValue = function (id, value) {
         if (varsValue[id]) {
-            var val = _parseValue(value);
+            var val = _parseValue(value, varsValue[id].type);
             varsValue[id].value = val;
             varsValue[id].changed = true;
-            logger.info(`'${data.name}' setValue(${id}, ${value})`, true);
+            logger.info(`'${data.name}' setValue(${id}, ${value})`, true, true);
+            return true;
         }
+        return false;
     }
 
     /**
      * Set the connection status to tag of device sttus
-     * @param {*} deviceId 
-     * @param {*} status 
+     * @param {*} deviceId
+     * @param {*} status
      */
     this.setConnectionStatus = function(deviceId, status) {
         var tag = connectionTags.find(tag => tag.memaddress === deviceId);
@@ -167,33 +171,62 @@ function FuxaServer(_data, _logger, _events) {
     this.bindAddDaq = function (fnc) {
         this.addDaq = fnc;                         // Add the DAQ value to db history
     }
-    this.addDaq = null;      
+    this.addDaq = null;
 
     /**
      * Return the timestamp of last read tag operation on polling
-     * @returns 
+     * @returns
      */
      this.lastReadTimestamp = () => {
         return lastTimestampValue;
     }
 
     /**
+     * Return the Daq settings of Tag
+     * @returns
+     */
+    this.getTagDaqSettings = (tagId) => {
+        return data.tags[tagId] ? data.tags[tagId].daq : null;
+    }
+
+    /**
+     * Set Daq settings of Tag
+     * @returns
+     */
+    this.setTagDaqSettings = (tagId, settings) => {
+        if (data.tags[tagId]) {
+            utils.mergeObjectsValues(data.tags[tagId].daq, settings);
+        }
+    }
+
+    /**
      * Cheack and parse the value return converted value
      * @param {*} value as string
      */
-    var _parseValue = function (value) {
-        let val = parseFloat(value);
-        if (Number.isNaN(val)) {
-            // maybe boolean
-            val = Number(value);
-            // maybe string
-            if (Number.isNaN(val)) {
-                val = value;
+    var _parseValue = function (value, type) {
+        if (type === 'number') {
+            return parseFloat(value);
+        } else if (type === 'boolean') {
+            if (typeof value === 'string') {
+                return value.toLowerCase() !== 'false';
             }
+            return Boolean(value);
+        } else if (type === 'string') {
+            return value;
         } else {
-            val = parseFloat(val.toFixed(5));
+            let val = parseFloat(value);
+            if (Number.isNaN(val)) {
+                // maybe boolean
+                val = Number(value);
+                // maybe string
+                if (Number.isNaN(val)) {
+                    val = value;
+                }
+            } else {
+                val = parseFloat(val.toFixed(5));
+            }
+            return val;
         }
-        return val;
     }
 
     /**
@@ -207,14 +240,14 @@ function FuxaServer(_data, _logger, _events) {
     }
 
     /**
-     * Return the Tags that have value changed and clear value changed flag of all Tags 
+     * Return the Tags that have value changed and clear value changed flag of all Tags
      */
-    var _checkVarsChanged = () => {
+    var _checkVarsChanged = async () => {
         const timestamp = new Date().getTime();
         var result = {};
         for (var id in data.tags) {
             if (!utils.isNullOrUndefined(data.tags[id].value)) {
-                data.tags[id].value = deviceUtils.tagValueCompose(data.tags[id].value, data.tags[id]);
+                data.tags[id].value = await deviceUtils.tagValueCompose(data.tags[id].value, varsValue[id] ? varsValue[id].value : null, data.tags[id]);
                 data.tags[id].timestamp = timestamp;
                 if (this.addDaq && deviceUtils.tagDaqToSave(data.tags[id], timestamp)) {
                     result[id] = data.tags[id];
@@ -227,7 +260,7 @@ function FuxaServer(_data, _logger, _events) {
     }
     /**
      * Emit the Tags values array { id: <name>, value: <value>, type: <type> }
-     * @param {*} values 
+     * @param {*} values
      */
     var _emitValues = function (values) {
         events.emit('device-value:changed', { id: data.name, values: values });
@@ -235,7 +268,7 @@ function FuxaServer(_data, _logger, _events) {
 
     /**
      * Used to manage the async connection and polling automation (that not overloading)
-     * @param {*} check 
+     * @param {*} check
      */
     var _checkWorking = function (check) {
         if (check && working) {

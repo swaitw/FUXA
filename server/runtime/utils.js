@@ -4,10 +4,12 @@ const ip = require('ip');
 'use strict';
 var utils = module.exports = {
 
+    SMALLEST_NEGATIVE_INTEGER: -9007199254740991,
+
     domStringSplitter: function (src, tagsplitter, first) {
         var result = { before: '', tagcontent: '', after: '' };
         var tagStart = '<' + tagsplitter.toLowerCase();
-        var tagEnd = '</' + tagsplitter.toLowerCase(); 
+        var tagEnd = '</' + tagsplitter.toLowerCase();
         var text = src.toLowerCase();
         var start = text.indexOf(tagStart, first);
         var end = text.indexOf(tagEnd, start);
@@ -26,13 +28,28 @@ var utils = module.exports = {
             var temp  = '';
             while((pos = text.indexOf(tagStart, pos)) !== -1) {
                 pos += tagStart.length + 1;
-                temp += src.slice(0, pos) + attribute + ' ' + src.slice(pos);
+                if (text.indexOf('>') === tagStart.length) {
+                    temp += src.slice(0, pos - 1) + ' ' + attribute + ' >' + src.slice(pos);
+                } else {
+                    temp += src.slice(0, pos) + attribute + ' ' + src.slice(pos);
+                }
             }
             if (temp.length) {
                 result = temp;
             }
         }
         return result;
+    },
+
+    domStringSetOverlay: function (htmlString, tagNames) {
+        tagNames.forEach(tagName => {
+            const lowerTagName = tagName.toLowerCase();
+            const regex = new RegExp(`(<${lowerTagName}[^>]*?>.*?</${lowerTagName}>)`, "gis");
+            const style = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 9999; pointer-events: all; display: none;";
+            htmlString = htmlString.replace(regex, `<div style="${style}">$1</div>`);
+        });
+
+        return htmlString;
     },
 
     /**
@@ -68,7 +85,7 @@ var utils = module.exports = {
     },
 
     isEmptyObject: function (value) {
-        return value && Object.keys(value).length === 0 && value.constructor === Object;
+        return !value || (Object.keys(value).length === 0 && value.constructor === Object);
     },
 
     isObject(value) {
@@ -102,6 +119,25 @@ var utils = module.exports = {
 
     isNullOrUndefined: function (ele) {
         return (ele === null || ele === undefined) ? true : false;
+    },
+
+    JsonTryToParse(value) {
+        try {
+            if (value) {
+                return JSON.parse(value);
+            }
+        } catch { }
+    },
+
+    mergeObjectsValues: function (obj1, obj2) {
+        if (typeof obj1 === 'object' && typeof obj2 === 'object') {
+            for (let key in obj2) {
+                if (obj1.hasOwnProperty(key)) {
+                    obj1[key] = obj2[key];
+                }
+            }
+        }
+        return obj1;
     },
 
     dayOfYear: function (date) {
@@ -207,5 +243,71 @@ var utils = module.exports = {
           chunks.push(array.slice(i, i + chunkSize));
         }
         return chunks;
+    },
+
+    chunkTimeRange: (start, end, chunkSize) => {
+        const chunks = [];
+        let currentStart = start;
+        if (chunkSize < 1) {
+            return [{ start: start, end: end }];
+        }
+        while (currentStart < end) {
+            const currentEnd = Math.min(currentStart + chunkSize, end);
+            chunks.push({ start: currentStart, end: currentEnd });
+            currentStart = currentEnd;
+        }
+        return chunks;
+    },
+
+    extractArray: function (object) {
+        let index = 0;
+        const array = [];
+
+        while (object[index] !== undefined) {
+            array.push(object[index]);
+            index++;
+        }
+        return array;
+    },
+
+    getNetworkInterfaces: function () {
+        const interfaces = os.networkInterfaces();
+        var result = [];
+        Object.keys(interfaces).forEach((interfaceName) => {
+            interfaces[interfaceName].forEach((iface) => {
+                if (iface.interal === true) return;
+                if (iface.family !== 'IPv4') return;
+                result.push(iface.address);
+            });
+        });
+        return result;
+    },
+
+    getRetentionLimit: function(retention) {
+        var dayToAdd = 0;
+        if (retention === 'day1') {
+            dayToAdd = 1;
+        } else if (retention === 'days2') {
+            dayToAdd = 2;
+        } else if (retention === 'days3') {
+            dayToAdd = 3;
+        } else if (retention === 'days7') {
+            dayToAdd = 7;
+        } else if (retention === 'days14') {
+            dayToAdd = 14;
+        } else if (retention === 'days30') {
+            dayToAdd = 30;
+        } else if (retention === 'days90') {
+            dayToAdd = 90;
+        } else if (retention === 'year1') {
+            dayToAdd = 365;
+        } else if (retention === 'year3') {
+            dayToAdd = 365 * 3;
+        } else if (retention === 'year5') {
+            dayToAdd = 365 * 5;
+        }
+        const date = new Date();
+        date.setDate(date.getDate() - dayToAdd);
+        return date;
     }
 }

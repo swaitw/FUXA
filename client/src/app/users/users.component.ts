@@ -1,38 +1,61 @@
 /* eslint-disable @angular-eslint/component-class-suffix */
-import { Component, Inject, OnInit, AfterViewInit, ViewChild } from '@angular/core';
-import { MatTable, MatTableDataSource } from '@angular/material/table';
+import { Component, OnInit, AfterViewInit, ViewChild, OnDestroy } from '@angular/core';
+import { MatLegacyTable as MatTable, MatLegacyTableDataSource as MatTableDataSource } from '@angular/material/legacy-table';
 import { MatSort } from '@angular/material/sort';
-import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
-
-import { SelOptionsComponent } from '../gui-helpers/sel-options/sel-options.component';
+import { MatLegacyDialog as MatDialog } from '@angular/material/legacy-dialog';
 
 import { UserService } from '../_services/user.service';
-import { User, UserGroups } from '../_models/user';
+import { Role, User, UserGroups } from '../_models/user';
+import { UserEditComponent, UserInfo } from './user-edit/user-edit.component';
+import { ProjectService } from '../_services/project.service';
+import { ConfirmDialogComponent } from '../gui-helpers/confirm-dialog/confirm-dialog.component';
+import { TranslateService } from '@ngx-translate/core';
+import { SettingsService } from '../_services/settings.service';
+import { Subject, takeUntil } from 'rxjs';
 
 @Component({
 	selector: 'app-users',
 	templateUrl: './users.component.html',
 	styleUrls: ['./users.component.css']
 })
-export class UsersComponent implements OnInit, AfterViewInit {
+export class UsersComponent implements OnInit, AfterViewInit, OnDestroy {
 
-	displayedColumns = ['select', 'username', 'fullname', 'groups', 'remove'];
+	displayedColumns = ['select', 'username', 'fullname', 'groups', 'start', 'remove'];
 	dataSource = new MatTableDataSource([]);
 
 	users: User[];
+	usersInfo = {};
+	roles: Role[];
 
 	@ViewChild(MatTable, {static: false}) table: MatTable<any>;
 	@ViewChild(MatSort, {static: false}) sort: MatSort;
 
+    private destroy$ = new Subject<void>();
+
 	constructor(private dialog: MatDialog,
-		private userService: UserService) { }
+				private projectService: ProjectService,
+                private translateService: TranslateService,
+				private settingsService: SettingsService,
+				private userService: UserService) { }
 
 	ngOnInit() {
 		this.loadUsers();
+		this.userService.getRoles().pipe(
+            takeUntil(this.destroy$)
+		).subscribe((roles: Role[]) => {
+			this.roles = roles;
+		}, err => {
+			console.error('get Roles err: ' + err);
+		});
 	}
 
 	ngAfterViewInit() {
 		this.dataSource.sort = this.sort;
+	}
+
+	ngOnDestroy() {
+		this.destroy$.next();
+        this.destroy$.complete();
 	}
 
 	onAddUser() {
@@ -45,7 +68,20 @@ export class UsersComponent implements OnInit, AfterViewInit {
 	}
 
 	onRemoveUser(user: User) {
-		this.editUser(user, null);
+        let msg = this.translateService.instant('msg.user-remove', { value: user.username });
+        let dialogRef = this.dialog.open(ConfirmDialogComponent, {
+            data: { msg: msg },
+            position: { top: '60px' }
+        });
+        dialogRef.afterClosed().subscribe(result => {
+            if (result && user) {
+				this.userService.removeUser(user).subscribe(result => {
+					this.users = this.users.filter(function(el) { return el.username !== user.username; });
+					this.bindToTable(this.users);
+				}, err => {
+				});
+            }
+        });
 	}
 
 	isAdmin(user: User): boolean {
@@ -56,15 +92,36 @@ export class UsersComponent implements OnInit, AfterViewInit {
 		}
 	}
 
-	groupValueToLabel(grp: number): string {
-		return UserGroups.GroupToLabel(grp);
+	isRolePermission() {
+        return this.settingsService.getSettings()?.userRole;
+    }
+
+	permissionValueToLabel(user: User): string {
+		if (this.isRolePermission()) {
+			const userInfo = new UserInfo(user?.info);
+			return this.roles?.filter(role => userInfo.roleIds?.includes(role.id)).map(role => role.name).join(', ');
+		} else {
+			return UserGroups.GroupToLabel(user.groups);
+		}
+	}
+
+	getViewStartName(username: string) {
+		return this.usersInfo[username];
 	}
 
 	private loadUsers() {
 		this.users = [];
-		this.userService.getUsers(null).subscribe(result => {
-			Object.values<User>(result).forEach(u => {
-				this.users.push(u);
+		this.usersInfo = {};
+		this.userService.getUsers(null).pipe(
+            takeUntil(this.destroy$)
+		).subscribe(result => {
+			Object.values<User>(result).forEach(user => {
+				if (user.info) {
+					const start = JSON.parse(user.info)?.start;
+					const view = this.projectService.getViewFromId(start);
+					this.usersInfo[user.username] = view?.name;
+				}
+				this.users.push(user);
 			});
 			this.bindToTable(this.users);
 		}, err => {
@@ -75,24 +132,16 @@ export class UsersComponent implements OnInit, AfterViewInit {
 	private editUser(user: User, current: User) {
 		let muser: User = JSON.parse(JSON.stringify(user));
 		muser.password = '';
-		let dialogRef = this.dialog.open(DialogUser, {
+		let dialogRef = this.dialog.open(UserEditComponent, {
 			position: { top: '60px' },
 			data: { user: muser, current: current, users: this.users.map((u: User) => u.username) }
 		});
 		dialogRef.afterClosed().subscribe(result => {
 			if (result) {
-				if (!current) {
-					this.userService.removeUser(result).subscribe(result => {
-						this.users = this.users.filter(function(el) { return el.username !== muser.username; });
-						this.bindToTable(this.users);
-					}, err => {
-					});
-				} else {
-					this.userService.setUser(result).subscribe(result => {
-						this.loadUsers();
-					}, err => {
-					});
-				}
+				this.userService.setUser(result).subscribe(result => {
+					this.loadUsers();
+				}, err => {
+				});
 			}
 		}, err => {
 		});
@@ -103,56 +152,3 @@ export class UsersComponent implements OnInit, AfterViewInit {
 	}
 }
 
-@Component({
-	selector: 'app-dialog-user',
-	templateUrl: './user.dialog.html',
-})
-export class DialogUser {
-	selectedGroups = [];
-	groups = UserGroups.Groups;
-	showPassword: boolean;
-
-	@ViewChild(SelOptionsComponent, {static: false}) seloptions: SelOptionsComponent;
-
-	constructor(public dialogRef: MatDialogRef<DialogUser>,
-		@Inject(MAT_DIALOG_DATA) public data: any) {
-		this.selectedGroups = UserGroups.ValueToGroups(this.data.user.groups);
-	}
-
-	onNoClick(): void {
-		this.dialogRef.close();
-	}
-
-	onOkClick(): void {
-		if (this.seloptions) {
-			this.data.user.groups = UserGroups.GroupsToValue(this.seloptions.selected);
-		}
-		this.dialogRef.close(this.data.user);
-	}
-
-	isValid(name): boolean {
-		if (!this.data.current) {	// to remove
-			return true;
-		} else if (name) {
-			let editname = (this.data.user) ? this.data.user.username : null;
-			return (this.data.users.find((n) => n === name && n !== editname)) ? false : true;
-		}
-		return false;
-	}
-
-	isNewUser() {
-		return (this.data.current && this.data.current.username) ? true : false;
-	}
-
-	isAdmin(): boolean {
-		if (this.data.user && this.data.user.username === 'admin') {
-			return true;
-		} else {
-			return false;
-		}
-	}
-
-    keyDownStopPropagation(event) {
-        event.stopPropagation();
-    }
-}

@@ -27,6 +27,7 @@ export class NgxTouchKeyboardComponent {
   layoutMode = 'text';
   layoutName = 'alphabetic';
   debug = false;
+  fullScreen = false;
 
   @Output() closePanel = new EventEmitter<void>();
 
@@ -115,6 +116,12 @@ export class NgxTouchKeyboardComponent {
     }
   }
 
+  detachActiveInput() {
+    if (this._activeInputElement instanceof HTMLInputElement || this._activeInputElement instanceof HTMLTextAreaElement) {
+      this._activeInputElement.blur();
+    }
+  }
+
   /**
    * Set active input
    *
@@ -142,6 +149,10 @@ export class NgxTouchKeyboardComponent {
       inputMode &&
       ['numeric', 'decimal', 'tel'].some((i) => i === inputMode)
     ) {
+      const currentType = this._activeInputElement?.getAttribute('type');
+      if (currentType === 'number') {
+        this._activeInputElement?.setAttribute('type', 'text');
+      }
       this.layoutName = 'default';
     } else {
       this.layoutName = 'alphabetic';
@@ -228,22 +239,27 @@ export class NgxTouchKeyboardComponent {
     if (this.debug) {
       console.log('Key pressed:', button);
     }
-
     if (button === fnButton.SHIFT) {
       this.layoutName =
         this.layoutName === 'alphabetic' ? 'shift' : 'alphabetic';
       return;
     } else if (button === fnButton.DONE) {
       this.closePanel.emit();
+      this.detachActiveInput();
       return;
     }
 
-    const commonParams: [number, number, boolean] = [
+    let commonParams: [number, number, boolean] = [
       this._caretPosition || 0,
       this._caretPositionEnd || 0,
       true,
     ];
+
     let output = this._activeInputElement?.value || '';
+    if (this._caretPosition === null && this._caretPositionEnd === null) {
+      commonParams[0] = this._activeInputElement?.inputMode === 'decimal' ? output.length : 0;
+      commonParams[1] = this._activeInputElement?.inputMode === 'decimal' ? output.length : 0;
+    }
 
     if (!this.isStandardButton(button)) {
       // Handel functional button
@@ -330,6 +346,9 @@ export class NgxTouchKeyboardComponent {
     this._removeActiveButton();
   }
 
+  get current() {
+    return this._activeInputElement.value;
+  }
   // -----------------------------------------------------------------------------------------------------
   // @ Private methods
   // -----------------------------------------------------------------------------------------------------

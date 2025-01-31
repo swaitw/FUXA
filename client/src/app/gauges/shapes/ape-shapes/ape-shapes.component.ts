@@ -3,9 +3,10 @@
  */
 import { Component } from '@angular/core';
 import { GaugeBaseComponent } from '../../gauge-base/gauge-base.component';
-import { GaugeSettings, GaugeAction, Variable, GaugeStatus, GaugeActionStatus, GaugeActionsType, GaugeProperty } from '../../../_models/hmi';
+import { GaugeSettings, GaugeAction, Variable, GaugeStatus, GaugeActionStatus, GaugeActionsType, GaugeProperty, GaugePropertyColor } from '../../../_models/hmi';
 import { GaugeDialogType } from '../../gauge-property/gauge-property.component';
 import { Utils } from '../../../_helpers/utils';
+import { ShapesComponent } from '../shapes.component';
 
 declare var SVG: any;
 declare var Raphael: any;
@@ -17,14 +18,15 @@ declare var Raphael: any;
 })
 export class ApeShapesComponent extends GaugeBaseComponent {
 
-    static TypeId = 'ape';
-    static TypeTag = 'svg-ext-' + ApeShapesComponent.TypeId;      // used to identify shapes type, binded with the library svgeditor
+    // TypeId = 'ape';
+    static TypeTag = 'svg-ext-ape';  // used to identify shapes type, binded with the library svgeditor
+    static EliType = 'svg-ext-ape-eli';
+    static PistonType = 'svg-ext-ape-piston';
     static LabelTag = 'AnimProcEng';
-    static EliType = ApeShapesComponent.TypeTag + '-eli';
-    static PistonType = ApeShapesComponent.TypeTag + '-piston';
 
-    static actionsType = { stop: GaugeActionsType.stop, clockwise: GaugeActionsType.clockwise, anticlockwise: GaugeActionsType.anticlockwise, downup: GaugeActionsType.downup,
-        hide: GaugeActionsType.hide, show: GaugeActionsType.show };
+    static actionsType = { stop: GaugeActionsType.stop, clockwise: GaugeActionsType.clockwise, anticlockwise: GaugeActionsType.anticlockwise,
+                        downup: GaugeActionsType.downup, hide: GaugeActionsType.hide, show: GaugeActionsType.show, rotate : GaugeActionsType.rotate,
+                        move: GaugeActionsType.move  };
 
     constructor() {
         super();
@@ -78,19 +80,18 @@ export class ApeShapesComponent extends GaugeBaseComponent {
                 if (ga.property) {
                     let propValue = GaugeBaseComponent.checkBitmask((<GaugeProperty>ga.property).bitmask, value);
                     if (ga.property.variableId === sig.id && ga.property.ranges) {
-                        let fill = null;
-                        let stroke = null;
+                        let propertyColor = new GaugePropertyColor();
                         for (let idx = 0; idx < ga.property.ranges.length; idx++) {
                             if (ga.property.ranges[idx].min <= propValue && ga.property.ranges[idx].max >= propValue) {
-                                fill = ga.property.ranges[idx].color;
-                                stroke = ga.property.ranges[idx].stroke;
+                                propertyColor.fill = ga.property.ranges[idx].color;
+                                propertyColor.stroke = ga.property.ranges[idx].stroke;
                             }
                         }
-                        if (fill) {
-                            svgele.node.setAttribute('fill', fill);
+                        if (propertyColor.fill) {
+                            GaugeBaseComponent.walkTreeNodeToSetAttribute(svgele.node, 'fill', propertyColor.fill);
                         }
-                        if (stroke) {
-                            svgele.node.setAttribute('stroke', stroke);
+                        if (propertyColor.stroke) {
+                            GaugeBaseComponent.walkTreeNodeToSetAttribute(svgele.node, 'stroke', propertyColor.stroke);
                         }
                     }
                     // check actions
@@ -121,6 +122,10 @@ export class ApeShapesComponent extends GaugeBaseComponent {
                 let element = SVG.adopt(svgele.node);
                 this.runActionShow(element, act.type, gaugeStatus);
             }
+        } else if (this.actionsType[act.type] === this.actionsType.rotate) {
+            ShapesComponent.rotateShape(act, svgele, actValue);
+        } else if (ShapesComponent.actionsType[act.type] === ShapesComponent.actionsType.move) {
+            ShapesComponent.moveShape(act, svgele, actValue);
         } else {
             if (act.range.min <= actValue && act.range.max >= actValue) {
                 var element = SVG.adopt(svgele.node);
@@ -134,13 +139,15 @@ export class ApeShapesComponent extends GaugeBaseComponent {
             return;
         }
         if (element.timeline) {
-            console.log('stop');
-            element.timeline().pause(true);
+            element.timeline().stop();
+        }
+        if (gaugeStatus.actionRef?.animr) {
+            gaugeStatus.actionRef?.animr.unschedule();
         }
         if (ApeShapesComponent.actionsType[type] === ApeShapesComponent.actionsType.clockwise) {
-            gaugeStatus.actionRef = <GaugeActionStatus>{ type: type, animr: element.animate({swing: true, duration: 3000}).ease('-').rotate(365).loop() };
+            gaugeStatus.actionRef = ShapesComponent.startRotateAnimationShape(element, type, 360);
         } else if (ApeShapesComponent.actionsType[type] === ApeShapesComponent.actionsType.anticlockwise) {
-            gaugeStatus.actionRef = <GaugeActionStatus>{ type: type, animr: element.animate({swing: true, duration: 3000}).ease('-').rotate(-365).loop() };
+            gaugeStatus.actionRef = ShapesComponent.startRotateAnimationShape(element, type, -360);
         } else if (ApeShapesComponent.actionsType[type] === ApeShapesComponent.actionsType.downup) {
             let eletoanim = Utils.searchTreeStartWith(element.node, 'pm');
             if (eletoanim) {
@@ -158,10 +165,7 @@ export class ApeShapesComponent extends GaugeBaseComponent {
                 gaugeStatus.actionRef = <GaugeActionStatus>{ type: type, timer: timeout, spool: movefrom };
             }
         } else if (ApeShapesComponent.actionsType[type] === ApeShapesComponent.actionsType.stop) {
-            if (gaugeStatus.actionRef) {
-                ApeShapesComponent.clearAnimationTimer(gaugeStatus.actionRef);
-                gaugeStatus.actionRef.type = type;
-            }
+            ShapesComponent.stopAnimationShape(gaugeStatus, type);
         }
     }
 }

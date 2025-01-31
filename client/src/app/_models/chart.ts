@@ -14,11 +14,22 @@ export class ChartLine {
     fill?: string;
     yaxis: number;
     lineInterpolation?: number;
+    lineWidth?: number;
+    spanGaps = true;
+    zones?: ChartLineZone[];
+}
+
+export interface ChartLineZone {
+    min: number;
+    max: number;
+    stroke: string;
+    fill: string;
 }
 
 export enum ChartViewType {
-    realtime1 = 'chart.viewtype-realtime1',
-    history = 'chart.viewtype-history'
+    realtime1 = 'realtime1',
+    history = 'history',
+    custom = 'custom'
 }
 
 export enum ChartRangeType {

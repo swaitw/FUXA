@@ -11,8 +11,13 @@
                 <div class="my-form-field" style="vertical-align: bottom; margin-left: 13px;">
                     <span>{{'gauges.property-permission' | translate}}</span>
                     <div style="text-align:center;cursor:pointer;" class="my-form-field-permission" (click)="onEditPermission()">
-                        <mat-icon class="header-icon" style="line-height: 30px;" *ngIf="!property || !property.permission">lock_open</mat-icon>
-                        <mat-icon class="header-icon" style="line-height: 30px;" *ngIf="property && property.permission">lock</mat-icon>
+                        <mat-icon *ngIf="(property.permission || property.permissionRoles?.show?.length || property.permissionRoles?.enabled?.length); else unlock"
+                                class="header-icon"
+                                style="line-height: 28px;">lock</mat-icon>
+                        <ng-template #unlock>
+                            <mat-icon class="header-icon"
+                                    style="line-height: 28px;">lock_open</mat-icon>
+                        </ng-template>
                     </div>
                 </div>
             </div>
@@ -136,12 +141,12 @@
                         <div class="my-form-field slider-field" style="padding-left: 12px">
                             <span>{{'bag.property-min' | translate}}</span>
                             <input numberOnly [(ngModel)]="optcfg.minValue" (change)="onChangeOptions('minValue', optcfg.minValue)"
-                                style="width: 50px;text-align: center;display:inline-block;" type="text">
+                                style="width: 50px;text-align: center;display:inline-block;" type="number">
                         </div>
                         <div class="my-form-field slider-field" style="padding-left: 14px">
                             <span>{{'bag.property-max' | translate}}</span>
                             <input numberOnly [(ngModel)]="optcfg.maxValue" (change)="onChangeOptions('maxValue', optcfg.maxValue)"
-                                style="width: 50px;text-align: center;display:inline-block;" type="text">
+                                style="width: 50px;text-align: center;display:inline-block;" type="number">
                         </div>
                         <div class="my-form-field slider-field" style="padding-left: 12px">
                             <span>{{'bag.property-bar-width' | translate}}</span>

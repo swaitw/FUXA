@@ -16,6 +16,7 @@ import {
   PositionStrategy,
 } from '@angular/cdk/overlay';
 import { NgxTouchKeyboardComponent } from './ngx-touch-keyboard.component';
+import { Observable, Subject } from 'rxjs';
 
 @Directive({
   selector: 'input[ngxTouchKeyboard], textarea[ngxTouchKeyboard]',
@@ -57,6 +58,9 @@ export class NgxTouchKeyboardDirective implements OnDestroy {
   private _overlayRef!: OverlayRef;
   private _panelRef!: ComponentRef<NgxTouchKeyboardComponent>;
 
+  private closePanelSubject: Subject<void> = new Subject<void>();
+  private closePanelObservable: Observable<void>;
+
   /**
    * Constructor
    */
@@ -64,7 +68,9 @@ export class NgxTouchKeyboardDirective implements OnDestroy {
     private _overlay: Overlay,
     private _elementRef: ElementRef<HTMLInputElement>,
     @Inject(DOCUMENT) private _document: any
-  ) {}
+  ) {
+    this.closePanelObservable = this.closePanelSubject.asObservable();
+  }
 
   // -----------------------------------------------------------------------------------------------------
   // @ Lifecycle hooks
@@ -87,7 +93,7 @@ export class NgxTouchKeyboardDirective implements OnDestroy {
   /**
    * Open keyboard panel
    */
-  openPanel(eleRef: ElementRef<HTMLInputElement> = null): void {
+  openPanel(eleRef: ElementRef<HTMLInputElement> = null): Observable<void> {
     if (eleRef) {
       this._elementRef = eleRef;
       this._overlayRef = null;
@@ -120,12 +126,14 @@ export class NgxTouchKeyboardDirective implements OnDestroy {
       new ComponentPortal(NgxTouchKeyboardComponent)
     );
     this._panelRef.instance.debug = this.ngxTouchKeyboardDebug;
+    this._panelRef.instance.fullScreen = this.ngxTouchKeyboardFullScreen;
     this._panelRef.instance.setLocale(this._locale);
     this._panelRef.instance.setActiveInput(this._elementRef.nativeElement);
     this.isOpen = true;
 
     // Reference the input element
     this._panelRef.instance.closePanel.subscribe(() => this.closePanel());
+    return this.closePanelObservable;
   }
 
   /**
@@ -134,6 +142,7 @@ export class NgxTouchKeyboardDirective implements OnDestroy {
   closePanel(): void {
     this._overlayRef?.detach();
     this.isOpen = false;
+    this.closePanelSubject.next();
   }
 
   /**

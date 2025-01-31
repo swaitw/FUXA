@@ -14,6 +14,8 @@ export class NgxSwitchComponent implements AfterViewInit {
     options: SwitchOptions = new SwitchOptions();
     checked = false;
     onUpdate: any;
+    isReadonly = false;
+    disabled = false;
 
     constructor() {
     }
@@ -23,6 +25,9 @@ export class NgxSwitchComponent implements AfterViewInit {
     }
 
     onClick() {
+        if (this.isReadonly) {
+            return;
+        }
         this.onRefresh();
         if (this.onUpdate) {
             this.onUpdate((this.checked) ? this.options.onValue.toString() : this.options.offValue.toString());
@@ -44,6 +49,10 @@ export class NgxSwitchComponent implements AfterViewInit {
             this.slider.nativeElement.innerHTML = this.options.offText;
         }
         this.slider.nativeElement.style.lineHeight = this.options.height + 'px';
+
+        this.switcher.nativeElement.disabled = this.disabled;
+        this.toggler.nativeElement.style.opacity = this.disabled ? '0.5' : '1';
+        this.toggler.nativeElement.style.pointerEvents = this.disabled ? 'none' : 'auto';
     }
 
     setOptions(options: SwitchOptions, force = false): boolean {
@@ -61,6 +70,11 @@ export class NgxSwitchComponent implements AfterViewInit {
 
     setValue(value: number) {
         this.switcher.nativeElement.checked = (value) ? true : false;
+        this.onRefresh();
+    }
+
+    setDisabled(state: boolean) {
+        this.disabled = state;
         this.onRefresh();
     }
 

@@ -25,13 +25,13 @@ import { IframeComponent } from './iframe/iframe.component';
 import { ViewComponent } from './view/view.component';
 import { LogsViewComponent } from './logs-view/logs-view.component';
 import { SidenavComponent } from './sidenav/sidenav.component';
-import { EditorComponent, DialogDocProperty, DialogDocName, DialogNewDoc, DialogLinkProperty } from './editor/editor.component';
-import { LayoutPropertyComponent, DialogMenuItem } from './editor/layout-property/layout-property.component';
+import { EditorComponent, DialogLinkProperty } from './editor/editor.component';
+import { LayoutPropertyComponent } from './editor/layout-property/layout-property.component';
 import { PluginsComponent } from './editor/plugins/plugins.component';
 import { AppSettingsComponent } from './editor/app-settings/app-settings.component';
 import { SetupComponent } from './editor/setup/setup.component';
-import { ChartConfigComponent, DialogChartLine } from './editor/chart-config/chart-config.component';
-import { GraphConfigComponent, DialogGraphSource } from './editor/graph-config/graph-config.component';
+import { ChartConfigComponent } from './editor/chart-config/chart-config.component';
+import { GraphConfigComponent } from './editor/graph-config/graph-config.component';
 import { CardConfigComponent } from './editor/card-config/card-config.component';
 import { AlarmViewComponent } from './alarms/alarm-view/alarm-view.component';
 import { AlarmListComponent } from './alarms/alarm-list/alarm-list.component';
@@ -39,17 +39,16 @@ import { AlarmPropertyComponent } from './alarms/alarm-property/alarm-property.c
 import { NotificationListComponent } from './notifications/notification-list/notification-list.component';
 import { NotificationPropertyComponent } from './notifications/notification-property/notification-property.component';
 import { ScriptListComponent } from './scripts/script-list/script-list.component';
-import { ScriptEditorComponent, DialogScriptParam } from './scripts/script-editor/script-editor.component';
+import { ScriptEditorComponent } from './scripts/script-editor/script-editor.component';
 import { ScriptSchedulingComponent } from './scripts/script-scheduling/script-scheduling.component';
 import { ScriptPermissionComponent } from './scripts/script-permission/script-permission.component';
 import { TextListComponent, DialogItemText } from './text-list/text-list.component';
 import { LabComponent } from './lab/lab.component';
-import { DeviceComponent, DeviceTagDialog } from './device/device.component';
+import { DeviceComponent } from './device/device.component';
 import { DevicePropertyComponent } from './device/device-property/device-property.component';
-import { TagPropertyComponent } from './device/tag-property/tag-property.component';
 import { TagOptionsComponent } from './device/tag-options/tag-options.component';
 import { TopicPropertyComponent } from './device/topic-property/topic-property.component';
-import { DeviceListComponent, DialogTagName } from './device/device-list/device-list.component';
+import { DeviceListComponent } from './device/device-list/device-list.component';
 import { DeviceMapComponent } from './device/device-map/device-map.component';
 import { FuxaViewComponent } from './fuxa-view/fuxa-view.component';
 import { CardsViewComponent } from './cards-view/cards-view.component';
@@ -98,7 +97,7 @@ import { ValueComponent } from './gauges/controls/value/value.component';
 
 import { FlexVariablesMappingComponent } from './gauges/gauge-property/flex-variables-mapping/flex-variables-mapping.component';
 import { FlexVariableMapComponent } from './gauges/gauge-property/flex-variable-map/flex-variable-map.component';
-import { GaugePropertyComponent, DialogGaugePermission } from './gauges/gauge-property/gauge-property.component';
+import { GaugePropertyComponent } from './gauges/gauge-property/gauge-property.component';
 import { ChartPropertyComponent } from './gauges/controls/html-chart/chart-property/chart-property.component';
 import { FlexInputComponent } from './gauges/gauge-property/flex-input/flex-input.component';
 import { FlexAuthComponent } from './gauges/gauge-property/flex-auth/flex-auth.component';
@@ -118,7 +117,7 @@ import { HtmlTableComponent } from './gauges/controls/html-table/html-table.comp
 import { HtmlSwitchComponent } from './gauges/controls/html-switch/html-switch.component';
 import { GaugeProgressComponent } from './gauges/controls/gauge-progress/gauge-progress.component';
 import { GaugeSemaphoreComponent } from './gauges/controls/gauge-semaphore/gauge-semaphore.component';
-import { UsersComponent, DialogUser } from './users/users.component';
+import { UsersComponent } from './users/users.component';
 import { LoginComponent } from './login/login.component';
 import { DialogUserInfo } from './home/home.component';
 import { ShapesComponent } from './gauges/shapes/shapes.component';
@@ -147,7 +146,7 @@ import { GraphBaseComponent } from './gauges/controls/html-graph/graph-base/grap
 import { NgChartsModule } from 'ng2-charts';
 import { IframePropertyComponent } from './gauges/controls/html-iframe/iframe-property/iframe-property.component';
 import { TablePropertyComponent } from './gauges/controls/html-table/table-property/table-property.component';
-import { TableCustomizerComponent, DialogTableCell } from './gauges/controls/html-table/table-customizer/table-customizer.component';
+import { TableCustomizerComponent } from './gauges/controls/html-table/table-customizer/table-customizer.component';
 import { DataTableComponent } from './gauges/controls/html-table/data-table/data-table.component';
 import { ReportListComponent } from './reports/report-list/report-list.component';
 import { ReportEditorComponent } from './reports/report-editor/report-editor.component';
@@ -161,10 +160,61 @@ import { ScriptModeComponent } from './scripts/script-mode/script-mode.component
 import { DeviceWebapiPropertyDialogComponent } from './device/device-map/device-webapi-property-dialog/device-webapi-property-dialog.component';
 import { SvgSelectorComponent } from './editor/svg-selector/svg-selector.component';
 import { FrameworkModule } from './framework/framework.module';
+import { StopInputPropagationDirective } from './_directives/stop-input-propagation.directive';
+import { HeartbeatService } from './_services/heartbeat.service';
+import { RcgiService } from './_services/rcgi/rcgi.service';
+import { ToastNotifierService } from './_services/toast-notifier.service';
+import { MyFileService } from './_services/my-file.service';
+import { TagsIdsConfigComponent } from './editor/tags-ids-config/tags-ids-config.component';
+import { MAT_LEGACY_TOOLTIP_DEFAULT_OPTIONS as MAT_TOOLTIP_DEFAULT_OPTIONS, MatLegacyTooltipDefaultOptions as MatTooltipDefaultOptions } from '@angular/material/legacy-tooltip';
+import { HtmlImageComponent } from './gauges/controls/html-image/html-image.component';
+import { NgxSchedulerComponent } from './gui-helpers/ngx-scheduler/ngx-scheduler.component';
+import { FlexDeviceTagComponent } from './gauges/gauge-property/flex-device-tag/flex-device-tag.component';
+import { PanelComponent } from './gauges/controls/panel/panel.component';
+import { PanelPropertyComponent } from './gauges/controls/panel/panel-property/panel-property.component';
+import { UserEditComponent } from './users/user-edit/user-edit.component';
+import { FuxaViewDialogComponent } from './fuxa-view/fuxa-view-dialog/fuxa-view-dialog.component';
+import { DeviceTagSelectionComponent } from './device/device-tag-selection/device-tag-selection.component';
+import { WebcamPlayerComponent } from './gui-helpers/webcam-player/webcam-player.component';
+import { WebcamPlayerDialogComponent } from './gui-helpers/webcam-player/webcam-player-dialog/webcam-player-dialog.component';
+import { ScriptEditorParamComponent } from './scripts/script-editor/script-editor-param/script-editor-param.component';
+import { TagPropertyEditS7Component } from './device/tag-property/tag-property-edit-s7/tag-property-edit-s7.component';
+import { TagPropertyEditServerComponent } from './device/tag-property/tag-property-edit-server/tag-property-edit-server.component';
+import { TagPropertyEditModbusComponent } from './device/tag-property/tag-property-edit-modbus/tag-property-edit-modbus.component';
+import { TagPropertyEditInternalComponent } from './device/tag-property/tag-property-edit-internal/tag-property-edit-internal.component';
+import { TagPropertyEditOpcuaComponent } from './device/tag-property/tag-property-edit-opcua/tag-property-edit-opcua.component';
+import { TagPropertyEditBacnetComponent } from './device/tag-property/tag-property-edit-bacnet/tag-property-edit-bacnet.component';
+import { TagPropertyEditWebapiComponent } from './device/tag-property/tag-property-edit-webapi/tag-property-edit-webapi.component';
+import { TagPropertyEditEthernetipComponent } from './device/tag-property/tag-property-edit-ethernetip/tag-property-edit-ethernetip.component';
+import { ViewPropertyComponent } from './editor/view-property/view-property.component';
+import { ResizeDirective } from './_directives/resize.directive';
+import { EditorViewsListComponent } from './editor/editor-views-list/editor-views-list.component';
+import { SvgUtils } from './_helpers/svg-utils';
+import { FlexWidgetPropertyComponent } from './gauges/gauge-property/flex-widget-property/flex-widget-property.component';
+import { GraphSourceEditComponent } from './editor/graph-config/graph-source-edit/graph-source-edit.component';
+import { LibWidgetsComponent } from './resources/lib-widgets/lib-widgets.component';
+import { TableCustomizerCellEditComponent } from './gauges/controls/html-table/table-customizer/table-customizer-cell-edit/table-customizer-cell-edit.component';
+import { TableAlarmsComponent } from './gauges/controls/html-table/table-alarms/table-alarms.component';
+import { TableReportsComponent } from './gauges/controls/html-table/table-reports/table-reports.component';
+import { ReportsService } from './_services/reports.service';
+import { ChartLinePropertyComponent } from './editor/chart-config/chart-line-property/chart-line-property.component';
+import { LayoutMenuItemPropertyComponent } from './editor/layout-property/layout-menu-item-property/layout-menu-item-property.component';
+import { LayoutHeaderItemPropertyComponent } from './editor/layout-property/layout-header-item-property/layout-header-item-property.component';
+import { PermissionDialogComponent } from './gauges/gauge-property/permission-dialog/permission-dialog.component';
+import { UsersRoleEditComponent } from './users/users-role-edit/users-role-edit.component';
+import { UsersRolesComponent } from './users/users-roles/users-roles.component';
+import { ActionPropertiesDialogComponent } from './gauges/gauge-property/action-properties-dialog/action-properties-dialog.component';
+import { ActionPropertyService } from './gauges/gauge-property/action-properties-dialog/action-property.service';
 
 export function createTranslateLoader(http: HttpClient) {
     return new TranslateHttpLoader(http, './assets/i18n/', '.json');
 }
+
+export const myCustomTooltipDefaults: MatTooltipDefaultOptions = {
+    showDelay: 2000,
+    hideDelay: 500,
+    touchendHideDelay: 500,
+};
 
 @NgModule({
     declarations: [
@@ -176,24 +226,31 @@ export function createTranslateLoader(http: HttpClient) {
         AppComponent,
         LabComponent,
         DeviceComponent,
-        DeviceTagDialog,
-        TagPropertyComponent,
+        DeviceTagSelectionComponent,
+        TagPropertyEditS7Component,
+        TagPropertyEditServerComponent,
+        TagPropertyEditModbusComponent,
+        TagPropertyEditInternalComponent,
+        TagPropertyEditOpcuaComponent,
+        TagPropertyEditBacnetComponent,
+        TagPropertyEditWebapiComponent,
+        TagPropertyEditEthernetipComponent,
         TagOptionsComponent,
         TopicPropertyComponent,
         DevicePropertyComponent,
         DeviceWebapiPropertyDialogComponent,
         LayoutPropertyComponent,
+        TagsIdsConfigComponent,
         PluginsComponent,
         AppSettingsComponent,
         SetupComponent,
-        DialogMenuItem,
+        LayoutMenuItemPropertyComponent,
+        LayoutHeaderItemPropertyComponent,
         DeviceListComponent,
-        DialogTagName,
         DeviceMapComponent,
         FuxaViewComponent,
-        DialogDocProperty,
-        DialogDocName,
-        DialogNewDoc,
+        FuxaViewDialogComponent,
+        ViewPropertyComponent,
         DialogLinkProperty,
         EditNameComponent,
         ConfirmDialogComponent,
@@ -206,11 +263,13 @@ export function createTranslateLoader(http: HttpClient) {
         HtmlChartComponent,
         HtmlGraphComponent,
         HtmlIframeComponent,
+        HtmlImageComponent,
         HtmlBagComponent,
         GaugeProgressComponent,
         GaugeSemaphoreComponent,
         GaugePropertyComponent,
-        DialogGaugePermission,
+        PermissionDialogComponent,
+        ActionPropertiesDialogComponent,
         SvgSelectorComponent,
         ChartPropertyComponent,
         BagPropertyComponent,
@@ -223,6 +282,7 @@ export function createTranslateLoader(http: HttpClient) {
         TesterComponent,
         TutorialComponent,
         FlexInputComponent,
+        FlexDeviceTagComponent,
         FlexAuthComponent,
         FlexHeadComponent,
         FlexEventComponent,
@@ -230,12 +290,14 @@ export function createTranslateLoader(http: HttpClient) {
         FlexVariableComponent,
         FlexVariablesMappingComponent,
         FlexVariableMapComponent,
+        FlexWidgetPropertyComponent,
         ValueComponent,
         DialogDraggableDirective,
         EnumToArrayPipe,
         EscapeHtmlPipe,
         DraggableDirective,
         NumberOnlyDirective,
+        StopInputPropagationDirective,
         NumberOrNullOnlyDirective,
         NgxFabButtonComponent,
         NgxFabItemButtonComponent,
@@ -259,15 +321,18 @@ export function createTranslateLoader(http: HttpClient) {
         ScriptModeComponent,
         ReportListComponent,
         ReportEditorComponent,
-        DialogScriptParam,
+        ScriptEditorParamComponent,
         TextListComponent,
         LogsViewComponent,
         NgxGaugeComponent,
         NgxNouisliderComponent,
-        DialogChartLine,
-        DialogGraphSource,
+        NgxSchedulerComponent,
+        ChartLinePropertyComponent,
+        GraphSourceEditComponent,
         UsersComponent,
-        DialogUser,
+        UsersRolesComponent,
+        UserEditComponent,
+        UsersRoleEditComponent,
         LoginComponent,
         DialogUserInfo,
         ViewComponent,
@@ -282,14 +347,23 @@ export function createTranslateLoader(http: HttpClient) {
         IframePropertyComponent,
         TablePropertyComponent,
         TableCustomizerComponent,
-        DialogTableCell,
+        TableCustomizerCellEditComponent,
+        TableAlarmsComponent,
+        TableReportsComponent,
         DataTableComponent,
         RangeNumberComponent,
         LibImagesComponent,
+        LibWidgetsComponent,
         ReportItemTextComponent,
         ReportItemTableComponent,
         ReportItemAlarmsComponent,
-        ReportItemChartComponent
+        ReportItemChartComponent,
+        PanelComponent,
+        PanelPropertyComponent,
+        WebcamPlayerComponent,
+        WebcamPlayerDialogComponent,
+        ResizeDirective,
+        EditorViewsListComponent
     ],
     imports: [
         BrowserModule,
@@ -326,11 +400,13 @@ export function createTranslateLoader(http: HttpClient) {
         ResWebApiService,
         ResDemoService,
         HmiService,
+        RcgiService,
         AppService,
         ProjectService,
         UserService,
         DiagnoseService,
         CommandService,
+        HeartbeatService,
         DataConverterService,
         ScriptService,
         ResourcesService,
@@ -342,6 +418,7 @@ export function createTranslateLoader(http: HttpClient) {
         GaugesManager,
         WindowRef,
         Utils,
+        SvgUtils,
         Calc,
         HtmlSwitchComponent,
         PipeComponent,
@@ -350,7 +427,12 @@ export function createTranslateLoader(http: HttpClient) {
         Dictionary,
         ModalPositionCache,
         Define,
-        AuthGuard
+        AuthGuard,
+        ToastNotifierService,
+        MyFileService,
+        ReportsService,
+        ActionPropertyService,
+        {provide: MAT_TOOLTIP_DEFAULT_OPTIONS, useValue: myCustomTooltipDefaults}
     ],
     bootstrap: [AppComponent]
 })

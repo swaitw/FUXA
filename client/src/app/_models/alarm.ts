@@ -21,6 +21,10 @@ export enum AlarmsType {
 export class AlarmProperty {
     variableId: string;
     permission: number;
+    permissionRoles: {
+        show: string[];
+        enabled: string[];
+    };
 }
 
 export class AlarmStatus {
@@ -74,6 +78,7 @@ export class AlarmAction extends AlarmSubRange {
     type: AlarmActionsType;
     actparam: any;
     variableId: any;
+    actoptions = {};
 }
 
 export enum AlarmAckMode {
@@ -94,14 +99,55 @@ export class AlarmEvent {
 }
 
 export class AlarmQuery {
-    from: string;
-    to: string;
+    start: Date;
+    end: Date;
+}
+
+export enum AlarmColumnsType {
+    ontime = 'ontime',
+    text = 'text',
+    type =  'type',
+    group = 'group',
+    status = 'status',
+    ack = 'ack',
+    history = 'history'
+}
+export const AlarmColumns: string[] = Object.values(AlarmColumnsType);
+
+export enum AlarmHistoryColumnsType {
+    ontime = 'ontime',
+    text = 'text',
+    type = 'type',
+    group = 'group',
+    status = 'status',
+    offtime = 'offtime',
+    acktime = 'acktime',
+    userack = 'userack',
+    history = 'history'
+}
+export const AlarmHistoryColumns: string[] = Object.values(AlarmHistoryColumnsType);
+
+export interface AlarmBaseType {
+    type: string;
+    name: string;
+    status: string;
+    text: string;
+    ontime: number;
+    offtime: number;
+    acktime: number;
+    userack: number;
+    group: string;
+    bkcolor: string;
+    color: string;
+    toack: boolean;
 }
 
 export enum AlarmActionsType {
     popup = 'alarm.action-popup',
     setView = 'alarm.action-onsetview',
     setValue = 'alarm.action-onsetvalue',
+    runScript = 'alarm.action-onRunScript',
+    toastMessage = 'alarm.action-toastMessage'
     // sendMsg = 'alarm.action-onsendmsg',
 }
 
@@ -127,4 +173,11 @@ export enum AlarmPriorityType {
     high = 'alarm.property-high',
     low = 'alarm.property-low',
     info = 'alarm.property-info'
+}
+
+export interface AlarmsFilter {
+    priority: string[],
+    text: string;
+    group: string;
+    tagIds: string[];
 }

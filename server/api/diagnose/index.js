@@ -30,10 +30,10 @@ module.exports = {
          * GET Server logs folder content
          */
         diagnoseApp.get('/api/logsdir', secureFnc, function (req, res) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api get logsdir: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({ error: "unauthorized_error", message: "Unauthorized!" });
                 runtime.logger.error("api get logsdir: Unauthorized!");
             } else {
@@ -59,15 +59,16 @@ module.exports = {
          * GET Server logs data
          */
         diagnoseApp.get('/api/logs', secureFnc, function (req, res) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api get logs: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({ error: "unauthorized_error", message: "Unauthorized!" });
                 runtime.logger.error("api get logs: Unauthorized!");
             } else {
                 try {
-                    var logFileName = req.query.file || 'fuxa.log';
+                    const fileName = req.query.file.replace(new RegExp('../', 'g'), '');
+                    var logFileName = fileName || 'fuxa.log';
                     var logPath = runtime.logger.logDir();
                     if (!fs.existsSync(logPath)) {
                         logPath = path.join(process.cwd(), runtime.logger.logDir());
@@ -98,10 +99,10 @@ module.exports = {
          * GET Server report folder content
          */
         diagnoseApp.get('/api/reportsdir', secureFnc, function (req, res) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api get reportdir: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({ error: "unauthorized_error", message: "Unauthorized!" });
                 runtime.logger.error("api get reportdir: Unauthorized!");
             } else {
@@ -129,17 +130,17 @@ module.exports = {
          * Test SMTP send mail
          */
         diagnoseApp.post("/api/sendmail", secureFnc, function (req, res, next) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api post sendmail: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api post sendmail: Unauthorized");
             } else {
                 try {
                     if (req.body.params.smtp && !req.body.params.smtp.password && runtime.settings.smtp && runtime.settings.smtp.password) {
                         req.body.params.smtp.password = runtime.settings.smtp.password;
-                    }                
+                    }
                     runtime.notificatorMgr.sendMail(req.body.params.msg, req.body.params.smtp).then(function() {
                         res.end();
                     }).catch(function(err) {

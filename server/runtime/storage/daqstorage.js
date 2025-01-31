@@ -6,8 +6,10 @@
 
 const fs = require('fs');
 const path = require('path');
-var SqliteDB = require("./sqlite");
-var InfluxDB = require("./influxdb");
+const SqliteDB = require("./sqlite");
+const InfluxDB = require("./influxdb");
+const TDengine  =require("./tdengine");
+const CurrentStorage = require("./sqlite/currentstorage");
 // var DaqNode = require('./daqnode');
 var calculator = require('./calculator');
 var utils = require('../utils');
@@ -17,12 +19,13 @@ var daqStoreType;
 var settings;
 var logger;
 var daqDB = {};                 // list of daqDB node: SQlite one pro device, influxDB only one
-var timeSerieDB;
+var currentStorateDB;
 
 function init(_settings, _log) {
     settings = _settings;
     logger = _log;
     logger.info("daqstorage: init successful!", true);
+    currentStorateDB = CurrentStorage.create(_settings, _log);
 }
 
 function reset() {
@@ -36,14 +39,17 @@ function reset() {
 
 function addDaqNode(_id, fncgetprop) {
     var id = _id;
-    if (_getDbType() === DaqStoreTypeEnum.influxDB) {
-        id = _getDbType();
+    const dbType = _getDbType();
+    if (dbType === DaqStoreTypeEnum.influxDB || dbType === DaqStoreTypeEnum.influxDB18 || dbType === DaqStoreTypeEnum.TDengine) {
+        id = dbType;
     }
     if (!daqDB[id]) {
-        if (id === DaqStoreTypeEnum.influxDB) {
-            daqDB[id] = InfluxDB.create(settings, logger);
+        if (id === DaqStoreTypeEnum.influxDB || id === DaqStoreTypeEnum.influxDB18) {
+            daqDB[id] = InfluxDB.create(settings, logger, currentStorateDB);
+        } else if(id === DaqStoreTypeEnum.TDengine){
+            daqDB[id] = TDengine.create(settings, logger, currentStorateDB);
         } else {
-            daqDB[id] = SqliteDB.create(settings, logger, id);
+            daqDB[id] = SqliteDB.create(settings, logger, id, currentStorateDB);
         }
     }
     return daqDB[id].setCall(fncgetprop);
@@ -121,7 +127,7 @@ function checkRetention() {
     return new Promise(async function (resolve, reject) {
         if (settings.daqstore && _getDbType() === DaqStoreTypeEnum.SQlite && settings.daqstore.retention !== 'none') {
             try {
-                SqliteDB.checkRetention(_getRetentionLimit(settings.daqstore.retention), settings.dbDir, 
+                SqliteDB.checkRetention(utils.getRetentionLimit(settings.daqstore.retention), settings.dbDir, 
                 (fileDeleted) => {
                     logger.info(`daqstorage.checkRetention file ${fileDeleted} removed`);
                 },
@@ -137,6 +143,10 @@ function checkRetention() {
     });
 }
 
+function getCurrentStorageFnc() {
+    return currentStorateDB.getValuesByDeviceId;
+}
+
 function _getDaqNode(tagid) {
     var nodes = Object.values(daqDB);
     for (var i = 0; i < nodes.length; i++) {
@@ -147,7 +157,7 @@ function _getDaqNode(tagid) {
 }
 
 function _getDbType() {
-    if (settings.daqstore && settings.daqstore) {
+    if (settings.daqstore && settings.daqstore.type) {
         return settings.daqstore.type;
     }
     return DaqStoreTypeEnum.SQlite;
@@ -156,37 +166,15 @@ function _getDbType() {
 var DaqStoreTypeEnum = {
     SQlite: 'SQlite',
     influxDB: 'influxDB',
+    influxDB18: 'influxDB18',
+    TDengine: 'TDengine',
 }
 
 function _getValue(value) {
-    if (value == Number.MAX_VALUE || value == Number.MIN_VALUE || value == null) {
+    if (value == Number.MAX_VALUE || value === utils.SMALLEST_NEGATIVE_INTEGER || value == null) {
         return '';
     }
     return value.toString();
-}
-
-var _getRetentionLimit = function(retention) {
-    var dayToAdd = 0;
-    if (retention === 'day1') {
-        dayToAdd = 1;
-    } else if (retention === 'days2') {
-        dayToAdd = 2;
-    } else if (retention === 'days3') {
-        dayToAdd = 3;
-    } else if (retention === 'days7') {
-        dayToAdd = 7;
-    } else if (retention === 'days14') {
-        dayToAdd = 14;
-    } else if (retention === 'days30') {
-        dayToAdd = 30;
-    } else if (retention === 'days90') {
-        dayToAdd = 90;
-    } else if (retention === 'year1') {
-        dayToAdd = 365;
-    }
-    const date = new Date();
-    date.setDate(date.getDate() - dayToAdd);
-    return date;
 }
 
 module.exports = {
@@ -196,4 +184,5 @@ module.exports = {
     getNodeValues: getNodeValues,
     getNodesValues: getNodesValues,
     checkRetention: checkRetention,
+    getCurrentStorageFnc: getCurrentStorageFnc,
 };

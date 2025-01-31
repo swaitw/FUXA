@@ -27,48 +27,22 @@ module.exports = {
         });
 
         /**
-         * POST build report
-         */
-         commandApp.post("/api/command", secureFnc, function (req, res, next) {
-            var groups = checkGroupsFnc(req);
-            if (res.statusCode === 403) {
-                runtime.logger.error("api post command: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
-                res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
-                runtime.logger.error("api post command: Unauthorized");
-            } else {
-                try {
-                    if (req.body.params.cmd === CommanTypeEnum.reportBuild) {
-                        if (runtime.jobsMgr.forceReport(req.body.params.report)) {
-                            res.end();
-                        } else {
-                            res.status(400).json({ error: "not_found", message: 'report not found!'});
-                            runtime.logger.error("api post buildreport: " + 'report not found!');
-                        }
-                    }
-                } catch (error) {
-                    res.status(400).json({ error: "error", message: error});
-                    runtime.logger.error("api post buildreport: " + error);
-                }
-            }
-        });
-
-        /**
          * GET download
          */
-        commandApp.get('/api/download', function(req, res){
-            var groups = checkGroupsFnc(req);
+        commandApp.get('/api/download', secureFnc, function(req, res){
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api post command: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api post command: Unauthorized");
             } else {
                 if (req.query.cmd === CommanTypeEnum.reportDownload) {
                     try {
-                        var reportPath = path.join(runtime.settings.reportsDir, req.query.name);
+                        const fileName = req.query.name.replace(new RegExp('../', 'g'), '');
+                        var reportPath = path.join(runtime.settings.reportsDir, fileName);
                         if (!fs.existsSync(reportPath)) {
-                            reportPath = path.join(process.cwd(), runtime.settings.reportsDir, req.query.name);
+                            reportPath = path.join(process.cwd(), runtime.settings.reportsDir, fileName);
                         }
                         if (fs.existsSync(reportPath)) {
                             res.sendFile(reportPath, (err) => {
@@ -90,13 +64,95 @@ module.exports = {
             }
         });
 
+        /**
+         * GET get tags values
+         */
+        commandApp.get("/api/getTagValue", secureFnc, async function (req, res, next) {
+            const permission = checkGroupsFnc(req);
+            if (res.statusCode === 403) {
+                runtime.logger.error("api get getTagValue: Tocken Expired");
+            } else if (!authJwt.haveAdminPermission(permission)) {
+                res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
+                runtime.logger.error("api get getTagValue: Unauthorized");
+            } else {
+                try {
+                    var tagsIds = JSON.parse(req.query.ids);
+                    if (tagsIds) {
+                        var errors = '';
+                        var result = [];
+                        for (const tagId of tagsIds) {
+                            try {
+                                const value = runtime.devices.getTagValue(tagId, true);
+                                if (value) {
+                                    result.push(value);
+                                } else {
+                                    result.push({id: tagId, value: null});
+                                    errors += `${tagId}; `;
+                                }
+                            } catch (err) {
+                                errors += `${tagId}: ${err}`;
+                            }
+                        }
+                        if (errors) {
+                            runtime.logger.error("api get getTagValue: " + 'id not found!' + errors);
+                        }
+                        res.json(result);
+                    } else {
+                        res.status(400).json({ error: "not_found", message: 'tag id not found!'});
+                        runtime.logger.error("api get getTagValue: " + 'id not found!');
+                    }
+                } catch (error) {
+                    res.status(400).json({ error: "error", message: error});
+                    runtime.logger.error("api get getTagValue: " + error);
+                }
+            }
+        });
+
+        /**
+         * POST set tags values
+         */
+        commandApp.post("/api/setTagValue", secureFnc, async function (req, res, next) {
+            const permission = checkGroupsFnc(req);
+            if (res.statusCode === 403) {
+                runtime.logger.error("api post setTagValue: Tocken Expired");
+            } else if (!authJwt.haveAdminPermission(permission)) {
+                res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
+                runtime.logger.error("api post setTagValue: Unauthorized");
+            } else {
+                try {
+                    if (req.body.tags) {
+                        var errors = '';
+                        for (const tag of req.body.tags) {
+                            try {
+                                if (!await runtime.devices.setTagValue(tag.id, tag.value)) {
+                                    errors += `${tag.id} not found; `
+                                }
+                            } catch (err) {
+                                errors += `${tag.id}: ${err}`;
+                            }
+                        }
+                        if (errors) {
+                            res.status(400).json({ error: "not_found", message: 'setTagValue Failed: ' + errors});
+                            runtime.logger.error("api post setTagValue Failed:" + errors);
+                        } else {
+                            res.end();
+                        }
+                    } else {
+                        res.status(400).json({ error: "not_found", message: 'no tags to set!'});
+                        runtime.logger.error("api post setTagValue: " + 'id not found!');
+                    }
+                } catch (error) {
+                    res.status(400).json({ error: "error", message: error});
+                    runtime.logger.error("api post setTagValue: " + error);
+                }
+            }
+        });
+
         return commandApp;
     }
 }
 
 
 const CommanTypeEnum = {
-    reportBuild: 'REPORT-BUILD',
-    reportDelete: 'REPORT-DELETE',
     reportDownload: 'REPORT-DOWNLOAD'
 };

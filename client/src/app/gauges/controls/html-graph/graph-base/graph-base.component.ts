@@ -12,6 +12,7 @@ export class GraphBaseComponent {
     id: string;
     isEditor: boolean;
     public static VerticalBarChartType: ChartType = 'bar';
+    public static PieChartType: ChartType = 'pie';
 
     init? (title: string, property: any, sources?: GraphSource[]): void;
     setOptions? (options: any): void;
@@ -55,4 +56,5 @@ export interface GraphOptions extends ChartOptions {
     gridLinesColor?: string;
     plugins?: any;
     scales?: any;
+    backgroundColor?: string;
 }

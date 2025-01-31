@@ -1,9 +1,9 @@
 import { Component, Input, OnDestroy, OnInit, ViewChild, ViewEncapsulation } from '@angular/core';
-import { FormControl } from '@angular/forms';
+import { UntypedFormControl } from '@angular/forms';
 import { ReplaySubject, Subject } from 'rxjs';
 
 import { FlexInputComponent } from '../flex-input/flex-input.component';
-import { GaugeProperty, IPropertyVariable } from '../../../_models/hmi';
+import { GaugeProperty, IPropertyVariable, WidgetProperty } from '../../../_models/hmi';
 import { Device, Tag } from '../../../_models/device';
 import { Utils } from '../../../_helpers/utils';
 
@@ -21,7 +21,7 @@ interface Variable {
 export class FlexHeadComponent implements OnInit, OnDestroy {
 
     @Input() data: any;
-    @Input() property: GaugeProperty;
+    @Input() property: GaugeProperty | WidgetProperty;
     @Input() withStaticValue = true;
     @Input() withBitmask = false;
     @ViewChild('flexinput', {static: false}) flexInput: FlexInputComponent;
@@ -34,11 +34,11 @@ export class FlexHeadComponent implements OnInit, OnDestroy {
     defaultColor = Utils.defaultColor;
 
     // alarm: string;
-    public alarmDeviceCtrl: FormControl = new FormControl();
-    public alarmDeviceFilterCtrl: FormControl = new FormControl();
+    public alarmDeviceCtrl: UntypedFormControl = new UntypedFormControl();
+    public alarmDeviceFilterCtrl: UntypedFormControl = new UntypedFormControl();
 
-    public alarmCtrl: FormControl = new FormControl();
-    public alarmFilterCtrl: FormControl = new FormControl();
+    public alarmCtrl: UntypedFormControl = new UntypedFormControl();
+    public alarmFilterCtrl: UntypedFormControl = new UntypedFormControl();
 
     /** list of variable filtered by search keyword */
     public filteredAlarmDevice: ReplaySubject<Device[]> = new ReplaySubject<Device[]>(1);

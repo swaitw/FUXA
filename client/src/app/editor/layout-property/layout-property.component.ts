@@ -1,29 +1,40 @@
 /* eslint-disable @angular-eslint/component-class-suffix */
-import { Component, OnInit, Inject, ViewChild } from '@angular/core';
-import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { Component, OnInit, Inject, ViewChild, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { MatLegacyDialog as MatDialog, MatLegacyDialogRef as MatDialogRef, MAT_LEGACY_DIALOG_DATA as MAT_DIALOG_DATA } from '@angular/material/legacy-dialog';
 import { TranslateService } from '@ngx-translate/core';
 
-import { SelOptionsComponent } from '../../gui-helpers/sel-options/sel-options.component';
 import { ProjectService } from '../../_services/project.service';
 
-import { LayoutSettings, NaviModeType, NaviItem, NaviItemType, NotificationModeType, ZoomModeType, InputModeType, HeaderBarModeType, LinkType } from '../../_models/hmi';
+import { LayoutSettings, NaviModeType, NaviItem, NaviItemType, NotificationModeType, ZoomModeType, InputModeType, HeaderBarModeType, View, HeaderItem, AnchorType, GaugeProperty, LoginInfoType, LoginOverlayColorType } from '../../_models/hmi';
 import { Define } from '../../_helpers/define';
-import { UserGroups } from '../../_models/user';
 import { Utils } from '../../_helpers/utils';
-import { UploadFile } from '../../_models/project';
 import { ResourceGroup, ResourceItem, Resources, ResourceType } from '../../_models/resources';
 import { ResourcesService } from '../../_services/resources.service';
+import { interval, Subject, takeUntil } from 'rxjs';
+import { GaugeDialogType, GaugePropertyComponent } from '../../gauges/gauge-property/gauge-property.component';
+import { HtmlButtonComponent } from '../../gauges/controls/html-button/html-button.component';
+import { CodemirrorComponent } from '@ctrl/ngx-codemirror';
+import { MatTabChangeEvent } from '@angular/material/tabs';
+import 'codemirror/mode/css/css';
+import { LayoutMenuItemPropertyComponent } from './layout-menu-item-property/layout-menu-item-property.component';
+import { LayoutHeaderItemPropertyComponent } from './layout-header-item-property/layout-header-item-property.component';
 
 @Component({
     selector: 'app-layout-property',
     templateUrl: './layout-property.component.html',
     styleUrls: ['./layout-property.component.scss']
 })
-export class LayoutPropertyComponent implements OnInit {
+export class LayoutPropertyComponent implements OnInit, OnDestroy {
 
     draggableListLeft = [];
-    layout: any;
+    headerItems: HeaderItem[];
+    layout: LayoutSettings;
     defaultColor = Utils.defaultColor;
+    fonts = Define.fonts;
+    anchorType = <AnchorType[]>['left', 'center', 'right'];
+    loginInfoType = <LoginInfoType[]>['nothing', 'username', 'fullname', 'both'];
+    currentDateTime: Date;
+    private unsubscribeTimer$ = new Subject<void>();
 
     startView: string;
     sideMode: string;
@@ -35,20 +46,32 @@ export class LayoutPropertyComponent implements OnInit {
     inputMode = InputModeType;
     headerMode = HeaderBarModeType;
     logo = null;
+    loginOverlayColor = LoginOverlayColorType;
+    ready = false;
+    @ViewChild(CodemirrorComponent, {static: false}) CodeMirror: CodemirrorComponent;
+    codeMirrorContent: string;
+    codeMirrorOptions = {
+        lineNumbers: true,
+        theme: 'material',
+        mode: 'css',
+        lint: true,
+    };
 
-    constructor(@Inject(MAT_DIALOG_DATA) public data: any,
+    constructor(@Inject(MAT_DIALOG_DATA) public data: ILayoutPropertyData,
         public dialog: MatDialog,
         public dialogRef: MatDialogRef<LayoutPropertyComponent>,
+        private projectService: ProjectService,
+        private changeDetector: ChangeDetectorRef,
         private translateService: TranslateService,
         private resourcesService: ResourcesService) {
-        if (!data.layout) {
-            data.layout = new LayoutSettings();
-        }
+
+        data.layout = <LayoutSettings>Utils.mergeDeep(new LayoutSettings(), data.layout);
         this.startView = data.layout.start;
         this.sideMode = data.layout.navigation.mode;
         if (!data.layout.navigation.items) {
             data.layout.navigation.items = [];
         }
+        this.headerItems = data.layout.header.items ?? [];
         this.draggableListLeft = data.layout.navigation.items;
         this.resourcesService.getResources(ResourceType.images).subscribe((result: Resources) => {
             if (result) {
@@ -85,16 +108,45 @@ export class LayoutPropertyComponent implements OnInit {
         });
     }
 
-    onAddMenuItem(item) {
+    ngOnDestroy() {
+        this.unsubscribeTimer$.next();
+        this.unsubscribeTimer$.complete();
+    }
+
+
+    onTabChanged(event: MatTabChangeEvent): void {
+        if (event.index == 3) {
+            this.changeDetector.detectChanges();
+            this.CodeMirror?.codeMirror?.refresh();
+        }
+    }
+
+    checkTimer(): void {
+        if (this.data.layout.header?.dateTimeDisplay) {
+            if (!this.currentDateTime) {
+                interval(1000).pipe(
+                    takeUntil(this.unsubscribeTimer$)
+                ).subscribe(() => {
+                    this.currentDateTime = new Date();
+                });
+            }
+        } else {
+            this.unsubscribeTimer$.next();
+            this.currentDateTime = null;
+        }
+    }
+
+    onAddMenuItem(item: NaviItem = null) {
         let eitem = new NaviItem();
         if (item) {
             eitem = JSON.parse(JSON.stringify(item));
         }
         let views = JSON.parse(JSON.stringify(this.data.views));
         views.unshift({id: '', name: ''});
-        let dialogRef = this.dialog.open(DialogMenuItem, {
+        let dialogRef = this.dialog.open(LayoutMenuItemPropertyComponent, {
+            disableClose: true,
             position: { top: '60px' },
-            data: { item: eitem, views: views, permission: eitem.permission }
+            data: { item: eitem, views: views, permission: eitem.permission, permissionRoles: eitem.permissionRoles }
         });
 
         dialogRef.afterClosed().subscribe(result => {
@@ -106,6 +158,7 @@ export class LayoutPropertyComponent implements OnInit {
                     item.view = result.item.view;
                     item.link = result.item.link;
                     item.permission = result.permission;
+                    item.permissionRoles = result.permissionRoles;
                 } else {
                     let nitem = new NaviItem();
                     nitem.icon = result.item.icon;
@@ -114,11 +167,11 @@ export class LayoutPropertyComponent implements OnInit {
                     nitem.view = result.item.view;
                     nitem.link = result.item.link;
                     nitem.permission = result.permission;
+                    nitem.permissionRoles = result.permissionRoles;
                     this.draggableListLeft.push(nitem);
                 }
             }
         });
-        // this.winRef.nativeWindow.svgEditor.showDocProperties();
     }
 
     onRemoveMenuItem(index: number, item) {
@@ -133,23 +186,6 @@ export class LayoutPropertyComponent implements OnInit {
         }
     }
 
-    onOkClick() {
-        this.data.layout.navigation.items = [];
-        this.draggableListLeft.forEach(item => {
-            let nitem = new NaviItem();
-            nitem.icon = item.icon;
-            nitem.image = item.image;
-            nitem.text = item.text;
-            nitem.view = item.view;
-            nitem.link = item.link;
-            this.data.layout.navigation.items.push(nitem);
-        });
-    }
-
-    onNoClick(): void {
-		this.dialogRef.close();
-    }
-
     getViewName(vid: NaviItem) {
         if (vid.view) {
             const view = this.data.views.find(x=>x.id === vid.view);
@@ -162,62 +198,84 @@ export class LayoutPropertyComponent implements OnInit {
             return '';
         }
     }
-}
 
-@Component({
-    selector: 'dialog-menuitem',
-    templateUrl: './menuitem.dialog.html',
-})
-export class DialogMenuItem {
-    // defaultColor = Utils.defaultColor;
-	selectedGroups = [];
-    groups = UserGroups.Groups;
-    icons = Define.materialIcons;
-    linkAddress = LinkType.address;
-    linkAlarms = LinkType.alarms;
+    onAddHeaderItem(item: HeaderItem = null) {
+        let eitem = item ? JSON.parse(JSON.stringify(item)) : <HeaderItem> {
+            id: Utils.getShortGUID('i_'),
+            type: 'button',
+            marginLeft: 5,
+            marginRight: 5
+        };
+        let dialogRef = this.dialog.open(LayoutHeaderItemPropertyComponent, {
+            position: { top: '60px' },
+            data: eitem
+        });
 
-    @ViewChild(SelOptionsComponent, {static: false}) seloptions: SelOptionsComponent;
+        dialogRef.afterClosed().subscribe(result => {
+            if (result) {
+                if (item) {
+                    const index = this.headerItems.findIndex(hi => hi.id === item.id);
+                    this.headerItems[index] = result;
+                } else {
+                    this.headerItems.push(result);
+                }
+                this.data.layout.header.items = this.headerItems;
+            }
+        });
+    }
 
-    constructor(public projectService: ProjectService,
-        public dialogRef: MatDialogRef<DialogMenuItem>,
-        @Inject(MAT_DIALOG_DATA) public data: any) {
-            this.selectedGroups = UserGroups.ValueToGroups(this.data.permission);
+    onRemoveHeaderItem(index: number, item: HeaderItem) {
+        this.headerItems.splice(index, 1);
+        this.data.layout.header.items = this.headerItems;
+    }
+
+    onMoveHeaderItem(index, direction) {
+        if (direction === 'top' && index > 0) {
+            this.headerItems.splice(index - 1, 0, this.headerItems.splice(index, 1)[0]);
+        } else if (direction === 'bottom' && index < this.draggableListLeft.length) {
+            this.headerItems.splice(index + 1, 0, this.headerItems.splice(index, 1)[0]);
         }
+        this.data.layout.header.items = this.headerItems;
+    }
+
+    onEditPropertyItem(item: HeaderItem) {
+        let settingsProperty = <ISettingsGaugeProperty>{ property: item.property ?? new GaugeProperty() };
+        let hmi = this.projectService.getHmi();
+        let dlgType = GaugeDialogType.RangeAndText;
+        let title = this.translateService.instant('editor.header-item-settings');
+        let dialogRef = this.dialog.open(GaugePropertyComponent, {
+            position: { top: '60px' },
+            data: {
+                settings: settingsProperty,
+                devices: Object.values(this.projectService.getDevices()),
+                title: title,
+                views: hmi.views,
+                dlgType: dlgType,
+                withEvents: true,
+                withActions: HtmlButtonComponent.actionsType,
+                withBitmask: false,
+                withProperty: item.type !== 'label',
+                scripts: this.projectService.getScripts(),
+            }
+        });
+        dialogRef.afterClosed().subscribe(result => {
+            if (result) {
+                item.property = result.settings.property;
+            }
+        });
+    }
 
     onNoClick(): void {
         this.dialogRef.close();
     }
+}
 
-    onOkClick(): void {
-		this.data.permission = UserGroups.GroupsToValue(this.seloptions.selected);
-        this.dialogRef.close(this.data);
-    }
+export interface ILayoutPropertyData {
+    layout: LayoutSettings;
+    views: View[];
+    securityEnabled: boolean;
+}
 
-    /**
-     * add image to view
-     * @param event selected file
-     */
-    onSetImage(event) {
-        if (event.target.files) {
-            let filename = event.target.files[0].name;
-            let fileToUpload = { type: filename.split('.').pop().toLowerCase(), name: filename.split('/').pop(), data: null };
-            let reader = new FileReader();
-            reader.onload = () => {
-                try {
-                    fileToUpload.data = reader.result;
-                    this.projectService.uploadFile(fileToUpload).subscribe((result: UploadFile) => {
-                        this.data.item.image = result.location;
-                        this.data.item.icon = null;
-                    });
-                } catch (err) {
-                    console.error(err);
-                }
-            };
-            if (fileToUpload.type === 'svg') {
-                reader.readAsText(event.target.files[0]);
-            } else {
-                reader.readAsDataURL(event.target.files[0]);
-            }
-        }
-    }
+interface ISettingsGaugeProperty {
+    property: GaugeProperty;
 }

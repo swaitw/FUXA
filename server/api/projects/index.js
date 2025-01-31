@@ -32,8 +32,8 @@ module.exports = {
          * Take from project storage and reply 
          */
         prjApp.get("/api/project", secureFnc, function(req, res) {
-            var groups = checkGroupsFnc(req);
-            runtime.project.getProject(req.userId, groups).then(result => {
+            const permission = checkGroupsFnc(req);
+            runtime.project.getProject(req.userId, permission).then(result => {
                 // res.header("Access-Control-Allow-Origin", "*");
                 // res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
                 if (result) {
@@ -60,10 +60,10 @@ module.exports = {
          * Set to project storage
          */
         prjApp.post("/api/project", secureFnc, function(req, res, next) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api post project: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api post project: Unauthorized");
             } else {
@@ -88,10 +88,10 @@ module.exports = {
          * Set the value (general/view/device/...) to project storage
          */
         prjApp.post("/api/projectData", secureFnc, function(req, res, next) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api post projectData: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api post projectData: Unauthorized");
             } else {
@@ -132,10 +132,10 @@ module.exports = {
          * Take from project storage and reply 
          */
         prjApp.get("/api/device", secureFnc, function(req, res) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api get device: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api get device: Unauthorized");
             } else {
@@ -164,10 +164,10 @@ module.exports = {
          * Set to project storage
          */
         prjApp.post("/api/device", secureFnc, function(req, res, next) {
-            var groups = checkGroupsFnc(req);
+            const permission = checkGroupsFnc(req);
             if (res.statusCode === 403) {
                 runtime.logger.error("api post device: Tocken Expired");
-            } else if (authJwt.adminGroups.indexOf(groups) === -1 ) {
+            } else if (!authJwt.haveAdminPermission(permission)) {
                 res.status(401).json({error:"unauthorized_error", message: "Unauthorized!"});
                 runtime.logger.error("api post device: Unauthorized");
             } else {
@@ -190,17 +190,25 @@ module.exports = {
          * images will be in media file saved
          */
         prjApp.post('/api/upload', function (req, res) {
-            const file = req.body;
+            const file = req.body.resource;
+            const destination = req.body.destination;
             try {
                 let basedata = file.data;
                 let encoding = {};
                 // let basedata = file.data.replace(/^data:.*,/, '');
                 // let basedata = file.data.replace(/^data:image\/png;base64,/, "");
                 let fileName = file.name.replace(new RegExp('../', 'g'), '');
-                const filePath = path.join(runtime.settings.uploadFileDir, fileName);
                 if (file.type !== 'svg') {
                     basedata = file.data.replace(/^data:.*,/, '');
                     encoding = {encoding: 'base64'};
+                }
+                var filePath = path.join(runtime.settings.uploadFileDir, fileName);
+                if (destination) {
+                    const destinationDir = path.resolve(runtime.settings.appDir, `_${destination}`);
+                    if (!fs.existsSync(destinationDir)) {
+                        fs.mkdirSync(destinationDir);
+                    }
+                    filePath = path.join(destinationDir, fileName);
                 }
                 fs.writeFileSync(filePath, basedata, encoding);
                 let result = {'location': '/' + runtime.settings.httpUploadFileStatic + '/' + fileName };
